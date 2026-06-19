@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "https://glow-ai-git-master-srush23.vercel.app",
+        "https://auraelite-salon.netlify.app",
     ]
 
     class Config:
