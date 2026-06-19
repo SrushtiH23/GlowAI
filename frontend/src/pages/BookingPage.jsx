@@ -14,7 +14,7 @@ import { useAuth } from "../context/AuthContext";
 import SalonMap from "../components/SalonMap";
 import Navbar from "../components/Navbar";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "https://glowai-kamv.onrender.com";
 
 /* ════════════════════════════════════════════════════════════════
    STEP INDICATOR

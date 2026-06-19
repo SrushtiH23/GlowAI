@@ -12,7 +12,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://glowai-kamv.onrender.com";
 
 const AuthContext = createContext(null);
 
