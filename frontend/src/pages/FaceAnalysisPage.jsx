@@ -37,6 +37,7 @@ export default function FaceAnalysisPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedGender, setSelectedGender] = useState("");
+  const [selectedSalonId, setSelectedSalonId] = useState(null);
 
   // DB context states for booking integration
   const [salons, setSalons] = useState([]);
@@ -69,6 +70,10 @@ export default function FaceAnalysisPage() {
       if (sRes.ok) {
         const salonsList = await sRes.json();
         setSalons(salonsList);
+        if (salonsList.length > 0) {
+          const defaultSalon = salonsList.find((s) => s.name.toLowerCase().includes("rossano") || s.name.toLowerCase().includes("ferretti")) || salonsList[0];
+          setSelectedSalonId(defaultSalon.id);
+        }
         
         const servicesList = [];
         for (const salon of salonsList) {
@@ -195,8 +200,8 @@ export default function FaceAnalysisPage() {
   };
 
   const handleBookService = (styleName) => {
-    // Find an appropriate luxury salon (Rossano Ferretti or first available)
-    let targetSalon = salons.find((s) => s.name.toLowerCase().includes("rossano") || s.name.toLowerCase().includes("ferretti"));
+    // Find the chosen salon from selector state
+    let targetSalon = salons.find((s) => s.id === selectedSalonId);
     if (!targetSalon && salons.length > 0) targetSalon = salons[0];
     
     // Find matching haircut service or first service in the salon
@@ -453,6 +458,22 @@ export default function FaceAnalysisPage() {
                   >
                     ✨ Find Salons & Book Styles
                   </button>
+                </div>
+
+                {/* Salon Selector Block */}
+                <div style={styles.salonSelectorBox}>
+                  <label style={styles.salonSelectorLabel}>Choose Salon for Styling Booking:</label>
+                  <select
+                    value={selectedSalonId || ""}
+                    onChange={(e) => setSelectedSalonId(Number(e.target.value))}
+                    style={styles.salonSelectorSelect}
+                  >
+                    {salons.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.area}) — ★{s.rating}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Key Features Box */}
@@ -1070,5 +1091,33 @@ const styles = {
     color: "#a1a1aa",
     lineHeight: 1.6,
     margin: 0,
+  },
+  salonSelectorBox: {
+    background: "#121215",
+    border: "1px solid #26262b",
+    borderRadius: 10,
+    padding: 16,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  salonSelectorLabel: {
+    fontSize: "0.78rem",
+    fontWeight: 650,
+    color: "#a1a1aa",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  salonSelectorSelect: {
+    width: "100%",
+    background: "#08080a",
+    border: "1px solid #26262b",
+    borderRadius: 6,
+    padding: "10px 12px",
+    color: "#fcfcfd",
+    fontSize: "0.9rem",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    outline: "none",
+    cursor: "pointer",
   },
 };
