@@ -1,7 +1,7 @@
 /**
  * Navbar.jsx — Responsive Glassmorphic Navigation
- * Desktop: Top sticky bar with user profile.
- * Mobile: Native-style bottom tab bar.
+ * Supports dynamic public landing navigation (with smooth scroll and active highlights)
+ * and authenticated client dashboard views.
  */
 
 import React, { useState, useEffect } from "react";
@@ -13,18 +13,74 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("hero");
+  const [isScrolled, setIsScrolled] = useState(false);
 
+  // Monitor viewport size and scroll position
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 900);
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
-  const desktopItems = [
-    { label: "Dashboard", path: "/", icon: "🏠" },
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+
+      // Highlight active section on scroll for homepage
+      if (location.pathname === "/") {
+        const sections = ["hero", "services", "offers", "gallery", "testimonials"];
+        const scrollPosition = window.scrollY + 120; // Navbar offset
+
+        for (const sec of sections) {
+          const el = document.getElementById(sec);
+          if (el) {
+            const top = el.offsetTop;
+            const height = el.offsetHeight;
+            if (scrollPosition >= top && scrollPosition < top + height) {
+              setActiveSection(sec);
+              break;
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [location.pathname]);
+
+  // Navigate helper
+  const handleNavClick = (path, isAnchor = false) => {
+    if (isAnchor) {
+      if (location.pathname === "/") {
+        const el = document.getElementById(path.replace("#", ""));
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth" });
+        }
+      } else {
+        navigate("/" + path);
+      }
+    } else {
+      navigate(path);
+    }
+    setMobileMenuOpen(false);
+  };
+
+  const isActive = (path) => {
+    if (path === "/dashboard") {
+      return location.pathname === "/dashboard";
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  // Nav Items Definitions
+  const desktopAuthedItems = [
+    { label: "Dashboard", path: "/dashboard", icon: "🏠" },
     { label: "Offers", path: "/offers", icon: "🏷️" },
     { label: "Book", path: "/book", icon: "💇‍♂️" },
     { label: "AI Concierge", path: "/concierge", icon: "✨" },
@@ -33,35 +89,198 @@ export default function Navbar() {
   ];
 
   if (user?.salon_id) {
-    desktopItems.push({ label: "Owner Panel", path: "/owner-dashboard", icon: "💼" });
+    desktopAuthedItems.push({ label: "Owner Panel", path: "/owner-dashboard", icon: "💼" });
   }
 
-  const mobileItems = [
-    { label: "Dashboard", path: "/", icon: "🏠" },
+  const mobileAuthedItems = [
+    { label: "Dashboard", path: "/dashboard", icon: "🏠" },
     { label: "Offers", path: "/offers", icon: "🏷️" },
     { label: "Book", path: "/book", icon: "💇‍♂️" },
     { label: "AI Concierge", path: "/concierge", icon: "✨" },
     { label: "Face shape", path: "/face-analysis", icon: "📷" },
   ];
 
-  const handleNavClick = (path) => {
-    navigate(path);
-  };
+  const guestItems = [
+    { label: "Home", path: "#hero" },
+    { label: "Services", path: "#services" },
+    { label: "Offers", path: "#offers" },
+    { label: "Gallery", path: "#gallery" },
+    { label: "Reviews", path: "#testimonials" },
+  ];
 
-  const isActive = (path) => {
-    if (path === "/") {
-      return location.pathname === "/";
-    }
-    return location.pathname.startsWith(path);
-  };
+  // ── 1. LOGGED OUT GUEST VIEW (STICKY HEADER WITH HAMBURGER) ──────────
+  if (!user) {
+    return (
+      <nav
+        style={{
+          ...styles.desktopNav,
+          background: isScrolled ? "rgba(8, 8, 10, 0.9)" : "rgba(8, 8, 10, 0.4)",
+          borderBottom: isScrolled ? "1px solid #1f1f23" : "1px solid transparent",
+          boxShadow: isScrolled ? "0 10px 30px rgba(0,0,0,0.5)" : "none",
+        }}
+      >
+        <style>{`
+          .nav-hover-link {
+            position: relative;
+            transition: color 0.3s ease;
+          }
+          .nav-hover-link:after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -6px;
+            left: 0;
+            background-color: #c5a880;
+            transition: width 0.3s ease;
+          }
+          .nav-hover-link:hover:after, .nav-hover-link.active-link:after {
+            width: 100%;
+          }
+          .hamburger-icon {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            padding: 8px;
+            background: transparent;
+            border: none;
+          }
+          .hamburger-bar {
+            width: 24px;
+            height: 2px;
+            background-color: #ffffff;
+            transition: all 0.3s ease;
+          }
+          .hamburger-icon.open .bar-1 {
+            transform: translateY(8px) rotate(45deg);
+          }
+          .hamburger-icon.open .bar-2 {
+            opacity: 0;
+          }
+          .hamburger-icon.open .bar-3 {
+            transform: translateY(-8px) rotate(-45deg);
+          }
+          .mobile-menu-overlay {
+            position: fixed;
+            top: 72px;
+            left: 0;
+            right: 0;
+            background: rgba(18, 18, 21, 0.95);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid #26262b;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            gap: 20px;
+            z-index: 999;
+            transform: translateY(-150%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .mobile-menu-overlay.open {
+            transform: translateY(0);
+          }
+        `}</style>
 
+        <div style={styles.navContainer}>
+          {/* Brand */}
+          <div style={styles.brand} onClick={() => handleNavClick("#hero", true)}>
+            <span style={styles.brandText}>AURA</span>
+            <span style={styles.brandBadge}>Elite</span>
+          </div>
+
+          {/* Desktop Guest Links */}
+          {!isMobile && (
+            <div style={styles.links}>
+              {guestItems.map((item) => {
+                const active = location.pathname === "/" && activeSection === item.path.replace("#", "");
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => handleNavClick(item.path, true)}
+                    style={{
+                      ...styles.navLink,
+                      color: active ? "#c5a880" : "#a1a1aa",
+                    }}
+                    className={`nav-hover-link ${active ? "active-link" : ""}`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Desktop Guest Sign In */}
+          {!isMobile && (
+            <button
+              onClick={() => navigate("/login")}
+              style={styles.guestLoginBtn}
+            >
+              Sign In
+            </button>
+          )}
+
+          {/* Mobile Hamburger Button */}
+          {isMobile && (
+            <button
+              className={`hamburger-icon ${mobileMenuOpen ? "open" : ""}`}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle Menu"
+            >
+              <div className="hamburger-bar bar-1"></div>
+              <div className="hamburger-bar bar-2"></div>
+              <div className="hamburger-bar bar-3"></div>
+            </button>
+          )}
+        </div>
+
+        {/* Mobile Dropdown Menu */}
+        {isMobile && (
+          <div className={`mobile-menu-overlay ${mobileMenuOpen ? "open" : ""}`}>
+            {guestItems.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => handleNavClick(item.path, true)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#fcfcfd",
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  textAlign: "left",
+                  padding: "8px 0",
+                  cursor: "pointer",
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+            <div style={{ height: "1px", background: "#26262b", margin: "8px 0" }} />
+            <button
+              onClick={() => { navigate("/login"); setMobileMenuOpen(false); }}
+              style={{
+                ...styles.guestLoginBtn,
+                width: "100%",
+                textAlign: "center",
+                padding: "12px",
+              }}
+            >
+              Sign In
+            </button>
+          </div>
+        )}
+      </nav>
+    );
+  }
+
+  // ── 2. LOGGED IN CLIENT VIEW (DESKTOP STICKY NAVBAR / MOBILE BOTTOM TAB BAR) ──
   if (isMobile) {
-    // ── MOBILE BOTTOM NAVBAR ──────────────────────────────────────────
     return (
       <>
         {/* Mobile Header with Logo & Sign Out */}
         <div style={styles.mobileHeader}>
-          <div style={styles.brand} onClick={() => navigate("/")}>
+          <div style={styles.brand} onClick={() => navigate("/dashboard")}>
             <span style={styles.brandText}>AURA</span>
             <span style={styles.brandBadge}>Elite</span>
           </div>
@@ -79,7 +298,7 @@ export default function Navbar() {
 
         {/* Mobile Bottom Tab Navigation */}
         <div style={styles.mobileNav}>
-          {mobileItems.map((item) => {
+          {mobileAuthedItems.map((item) => {
             const active = isActive(item.path);
             return (
               <button
@@ -105,19 +324,26 @@ export default function Navbar() {
     );
   }
 
-  // ── DESKTOP/TABLET TOP NAVBAR ──────────────────────────────────────
+  // Desktop Authenticated Top Sticky Navbar
   return (
-    <nav style={styles.desktopNav}>
+    <nav
+      style={{
+        ...styles.desktopNav,
+        background: "rgba(18, 18, 21, 0.8)",
+        backdropFilter: "blur(12px)",
+        borderBottom: "1px solid #26262b",
+      }}
+    >
       <div style={styles.navContainer}>
         {/* Brand */}
-        <div style={styles.brand} onClick={() => navigate("/")}>
+        <div style={styles.brand} onClick={() => navigate("/dashboard")}>
           <span style={styles.brandText}>AURA</span>
           <span style={styles.brandBadge}>Elite</span>
         </div>
 
         {/* Navigation Links */}
         <div style={styles.links}>
-          {desktopItems.map((item) => {
+          {desktopAuthedItems.map((item) => {
             const active = isActive(item.path);
             return (
               <button
@@ -153,19 +379,18 @@ export default function Navbar() {
   );
 }
 
+// ── Navigation Styles ───────────────────────────────────────────────
+
 const styles = {
-  // Desktop Header
   desktopNav: {
     position: "sticky",
     top: 0,
-    zIndex: 100,
-    background: "rgba(18, 18, 21, 0.8)",
-    backdropFilter: "blur(12px)",
-    borderBottom: "1px solid #26262b",
+    zIndex: 1000,
     height: "72px",
     display: "flex",
     alignItems: "center",
     width: "100%",
+    transition: "all 0.3s ease",
   },
   navContainer: {
     maxWidth: "1200px",
@@ -185,7 +410,7 @@ const styles = {
   },
   brandText: {
     fontFamily: "'Playfair Display', serif",
-    fontSize: "1.3rem",
+    fontSize: "1.35rem",
     fontWeight: 700,
     letterSpacing: "0.08em",
     background: "linear-gradient(135deg, #fff 30%, #c5a880 100%)",
@@ -204,19 +429,34 @@ const styles = {
   },
   links: {
     display: "flex",
-    gap: "24px",
+    gap: "28px",
     height: "72px",
     alignItems: "center",
   },
   navLink: {
     background: "transparent",
     border: "none",
-    fontSize: "0.9rem",
+    fontSize: "0.88rem",
     fontWeight: 600,
     padding: "24px 4px 22px",
     cursor: "pointer",
     transition: "all 0.2s",
     fontFamily: "'Plus Jakarta Sans', sans-serif",
+  },
+  guestLoginBtn: {
+    background: "linear-gradient(135deg, #8a704c, #c5a880)",
+    border: "none",
+    color: "#0e0e0e",
+    fontWeight: 700,
+    fontSize: "0.85rem",
+    padding: "10px 24px",
+    borderRadius: "6px",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    cursor: "pointer",
+    boxShadow: "0 4px 15px rgba(197, 168, 128, 0.2)",
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+    transition: "all 0.3s",
   },
   profileBox: {
     display: "flex",
@@ -263,7 +503,7 @@ const styles = {
     transition: "all 0.2s",
   },
 
-  // Mobile Bottom Tab Bar
+  // Mobile Bottom Tab Bar (Only for authed views)
   mobileNav: {
     position: "fixed",
     bottom: 0,

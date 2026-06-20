@@ -331,7 +331,7 @@ export default function OwnerDashboard() {
               </div>
 
               {/* Description */}
-              <div style={styles.formGroup} style={{ marginTop: "14px" }}>
+              <div style={{ ...styles.formGroup, marginTop: "14px" }}>
                 <label style={styles.label}>Description</label>
                 <textarea
                   placeholder="Describe what services are included, specific terms, or requirements..."

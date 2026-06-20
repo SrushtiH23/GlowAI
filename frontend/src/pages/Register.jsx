@@ -58,7 +58,7 @@ export default function Register() {
 
     try {
       await register(email, password, fullName, isOwner ? Number(selectedSalonId) : null);
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

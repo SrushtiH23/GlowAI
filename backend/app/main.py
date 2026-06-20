@@ -78,3 +78,5 @@ def health_check():
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
     }
+
+# Trigger reload to pick up new GEMINI_API_KEY from .env

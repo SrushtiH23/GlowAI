@@ -23,6 +23,7 @@ import FaceAnalysisPage from "./pages/FaceAnalysisPage";
 import ReviewSummarizerPage from "./pages/ReviewSummarizerPage";
 import OffersPage from "./pages/OffersPage";
 import OwnerDashboard from "./pages/OwnerDashboard";
+import HomePage from "./pages/HomePage";
 import Navbar from "./components/Navbar";
 
 // ── Dashboard Layout ─────────────────────────────────────────────
@@ -414,12 +415,13 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/* Public routes */}
+          <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
           {/* Protected routes */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <Dashboard />
