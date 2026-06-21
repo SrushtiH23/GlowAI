@@ -95,7 +95,6 @@ export default function Navbar() {
     { label: "Dashboard", path: "/dashboard", icon: "🏠" },
     { label: "Offers", path: "/offers", icon: "🏷️" },
     { label: "Book", path: "/book", icon: "💇‍♂️" },
-    { label: "AI Concierge", path: "/concierge", icon: "✨" },
     { label: "AI Stylist", path: "/stylist", icon: "✨" },
     { label: "Face shape", path: "/face-analysis", icon: "📷" },
   ];
