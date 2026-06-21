@@ -35,9 +35,16 @@ export default function FaceAnalysisPage() {
 
   // File states
   const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [selectedGender, setSelectedGender] = useState("");
-  const [selectedSalonId, setSelectedSalonId] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(() => {
+    return sessionStorage.getItem("aura_face_preview") || null;
+  });
+  const [selectedGender, setSelectedGender] = useState(() => {
+    return sessionStorage.getItem("aura_face_gender") || "";
+  });
+  const [selectedSalonId, setSelectedSalonId] = useState(() => {
+    const saved = sessionStorage.getItem("aura_face_salon_id");
+    return saved ? Number(saved) : null;
+  });
 
   // DB context states for booking integration
   const [salons, setSalons] = useState([]);
@@ -46,7 +53,10 @@ export default function FaceAnalysisPage() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [analysis, setAnalysis] = useState(null);
+  const [analysis, setAnalysis] = useState(() => {
+    const saved = sessionStorage.getItem("aura_face_analysis");
+    return saved ? JSON.parse(saved) : null;
+  });
   const [loadingStep, setLoadingStep] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(window.innerWidth < 900);
@@ -64,6 +74,29 @@ export default function FaceAnalysisPage() {
     fetchSalonsAndServices();
   }, []);
 
+  // Restore selectedFile from base64 previewUrl in sessionStorage
+  useEffect(() => {
+    if (previewUrl && !selectedFile) {
+      try {
+        const arr = previewUrl.split(",");
+        if (arr.length >= 2) {
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const mime = mimeMatch ? mimeMatch[1] : "image/png";
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const file = new File([u8arr], "restored_selfie.png", { type: mime });
+          setSelectedFile(file);
+        }
+      } catch (err) {
+        console.error("Failed to restore selectedFile from previewUrl:", err);
+      }
+    }
+  }, [previewUrl, selectedFile]);
+
   async function fetchSalonsAndServices() {
     try {
       const sRes = await fetch(`${API}/api/salons`);
@@ -71,8 +104,11 @@ export default function FaceAnalysisPage() {
         const salonsList = await sRes.json();
         setSalons(salonsList);
         if (salonsList.length > 0) {
-          const defaultSalon = salonsList.find((s) => s.name.toLowerCase().includes("rossano") || s.name.toLowerCase().includes("ferretti")) || salonsList[0];
-          setSelectedSalonId(defaultSalon.id);
+          const savedId = sessionStorage.getItem("aura_face_salon_id");
+          if (!savedId) {
+            const defaultSalon = salonsList.find((s) => s.name.toLowerCase().includes("rossano") || s.name.toLowerCase().includes("ferretti")) || salonsList[0];
+            setSelectedSalonId(defaultSalon.id);
+          }
         }
         
         const servicesList = [];
@@ -118,8 +154,16 @@ export default function FaceAnalysisPage() {
       }
       setError("");
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+        sessionStorage.setItem("aura_face_preview", reader.result);
+      };
+      reader.readAsDataURL(file);
+      
       setAnalysis(null);
+      sessionStorage.removeItem("aura_face_analysis");
     }
   };
 
@@ -143,8 +187,16 @@ export default function FaceAnalysisPage() {
       }
       setError("");
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+        sessionStorage.setItem("aura_face_preview", reader.result);
+      };
+      reader.readAsDataURL(file);
+      
       setAnalysis(null);
+      sessionStorage.removeItem("aura_face_analysis");
     }
   };
 
@@ -157,6 +209,8 @@ export default function FaceAnalysisPage() {
     setPreviewUrl(null);
     setAnalysis(null);
     setError("");
+    sessionStorage.removeItem("aura_face_preview");
+    sessionStorage.removeItem("aura_face_analysis");
   };
 
   const handleSubmit = async (e) => {
@@ -192,6 +246,7 @@ export default function FaceAnalysisPage() {
 
       const data = await res.json();
       setAnalysis(data);
+      sessionStorage.setItem("aura_face_analysis", JSON.stringify(data));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -202,14 +257,27 @@ export default function FaceAnalysisPage() {
   const handleBookService = (styleName) => {
     // Find the chosen salon from selector state
     let targetSalon = salons.find((s) => s.id === selectedSalonId);
-    if (!targetSalon && salons.length > 0) targetSalon = salons[0];
+    if (!targetSalon && selectedSalonId) {
+      targetSalon = { id: selectedSalonId, name: "Selected Salon" };
+    }
+    if (!targetSalon && salons.length > 0) {
+      targetSalon = salons[0];
+    }
     
     // Find matching haircut service or first service in the salon
     let targetService = services.find(
       (svc) => svc.salon_id === targetSalon?.id && (svc.service_name.toLowerCase().includes("haircut") || svc.service_name.toLowerCase().includes("precision"))
     );
-    if (!targetService && services.length > 0) {
-      targetService = services.find((svc) => svc.salon_id === targetSalon?.id);
+    if (!targetService && services.length > 0 && targetSalon) {
+      targetService = services.find((svc) => svc.salon_id === targetSalon.id);
+    }
+    if (!targetService && targetSalon) {
+      targetService = {
+        salon_id: targetSalon.id,
+        service_name: styleName ? `Bespoke Hairstyle (${styleName})` : "Bespoke Styling Haircut",
+        price: 2500,
+        duration_minutes: 45
+      };
     }
 
     if (targetSalon) {
@@ -219,11 +287,16 @@ export default function FaceAnalysisPage() {
           service: targetService || null,
           faceShape: analysis?.face_shape || "",
           styleName: styleName || "",
-          isAIRecommendations: true
+          isAIRecommendations: true,
+          from: "/face-analysis"
         },
       });
     } else {
-      navigate("/book");
+      navigate("/book", {
+        state: {
+          from: "/face-analysis"
+        }
+      });
     }
   };
 
@@ -321,7 +394,7 @@ export default function FaceAnalysisPage() {
                       <button
                         key={g}
                         type="button"
-                        onClick={() => setSelectedGender(val)}
+                        onClick={() => { setSelectedGender(val); sessionStorage.setItem("aura_face_gender", val); }}
                         style={{
                           ...styles.genderBtn,
                           ...(isActive ? styles.genderBtnActive : {}),
@@ -465,7 +538,7 @@ export default function FaceAnalysisPage() {
                   <label style={styles.salonSelectorLabel}>Choose Salon for Styling Booking:</label>
                   <select
                     value={selectedSalonId || ""}
-                    onChange={(e) => setSelectedSalonId(Number(e.target.value))}
+                    onChange={(e) => { setSelectedSalonId(Number(e.target.value)); sessionStorage.setItem("aura_face_salon_id", e.target.value); }}
                     style={styles.salonSelectorSelect}
                   >
                     {salons.map((s) => (

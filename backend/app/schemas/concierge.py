@@ -85,3 +85,42 @@ class DressAnalysisResponse(BaseModel):
     makeup_recommendations: List[MakeupRecommendation] = Field(..., description="Makeup suggestions matching the dress")
     explanation: str = Field(..., description="Personalized explanation from the AI Stylist")
     is_mock: bool = Field(False, description="Indicates if a mock fallback response was used")
+
+
+# ── Stylist Assistant Schemas ─────────────────────────────────────
+
+class StylistService(BaseModel):
+    """A recommended service matching user concerns."""
+
+    name: str = Field(..., description="Name of the service")
+    estimated_cost: float = Field(..., description="Approximate price in INR")
+    why_helps: str = Field(..., description="Why this helps the concern")
+    salon_id: int = Field(..., description="ID of the salon offering this service")
+    salon_name: str = Field(..., description="Name of the salon")
+    service_id: Optional[int] = Field(None, description="Database ID of the service")
+
+
+class StylistOffer(BaseModel):
+    """An active offer available for booking."""
+
+    title: str = Field(..., description="Offer title")
+    discount_percentage: float = Field(..., description="Discount percentage")
+    salon_name: str = Field(..., description="Salon name")
+    salon_id: int = Field(..., description="Salon ID")
+
+
+class StylistResponse(BaseModel):
+    """Full structured response returned by the Aura AI Stylist."""
+
+    category: str = Field(..., description="Detected category: Hair, Skin, Nails, Makeup, Beard, Grooming, or General Beauty")
+    observations: List[str] = Field(..., description="Observations from text/image")
+    possible_concerns: List[str] = Field(..., description="Possible cosmetic concerns")
+    recommended_services: List[StylistService] = Field(..., description="Recommended salon services")
+    price_range_min: float = Field(..., description="Minimum estimated cost")
+    price_range_max: float = Field(..., description="Maximum estimated cost")
+    suitable_salon_category: str = Field(..., description="Suitable salon type/category")
+    active_offers: List[StylistOffer] = Field(..., description="Available active offers")
+    booking_recommendation: str = Field(..., description="Booking recommendation details")
+    explanation: str = Field(..., description="Concierge overview explanation")
+    is_mock: bool = Field(False, description="Indicates if a mock fallback response was used")
+

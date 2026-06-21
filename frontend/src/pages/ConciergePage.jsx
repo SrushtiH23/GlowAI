@@ -16,10 +16,19 @@ export default function ConciergePage() {
   const resultsRef = useRef(null);
 
   // Inputs
-  const [budget, setBudget] = useState(5000);
-  const [occasion, setOccasion] = useState("Date Night");
-  const [location, setLocation] = useState("All Locations");
-  const [hairType, setHairType] = useState("Wavy");
+  const [budget, setBudget] = useState(() => {
+    const saved = sessionStorage.getItem("aura_concierge_budget");
+    return saved ? Number(saved) : 5000;
+  });
+  const [occasion, setOccasion] = useState(() => {
+    return sessionStorage.getItem("aura_concierge_occasion") || "Date Night";
+  });
+  const [location, setLocation] = useState(() => {
+    return sessionStorage.getItem("aura_concierge_location") || "All Locations";
+  });
+  const [hairType, setHairType] = useState(() => {
+    return sessionStorage.getItem("aura_concierge_hair_type") || "Wavy";
+  });
 
   // DB database state (for matching full objects on Book Now)
   const [salons, setSalons] = useState([]);
@@ -28,7 +37,10 @@ export default function ConciergePage() {
   // UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [recommendation, setRecommendation] = useState(null);
+  const [recommendation, setRecommendation] = useState(() => {
+    const saved = sessionStorage.getItem("aura_concierge_recommendation");
+    return saved ? JSON.parse(saved) : null;
+  });
   const [loadingStep, setLoadingStep] = useState(0);
   const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved", "error"
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(window.innerWidth < 900);
@@ -40,6 +52,31 @@ export default function ConciergePage() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Sync inputs and recommendation to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem("aura_concierge_budget", budget.toString());
+  }, [budget]);
+
+  useEffect(() => {
+    sessionStorage.setItem("aura_concierge_occasion", occasion);
+  }, [occasion]);
+
+  useEffect(() => {
+    sessionStorage.setItem("aura_concierge_location", location);
+  }, [location]);
+
+  useEffect(() => {
+    sessionStorage.setItem("aura_concierge_hair_type", hairType);
+  }, [hairType]);
+
+  useEffect(() => {
+    if (recommendation) {
+      sessionStorage.setItem("aura_concierge_recommendation", JSON.stringify(recommendation));
+    } else {
+      sessionStorage.removeItem("aura_concierge_recommendation");
+    }
+  }, [recommendation]);
 
   // Fetch salons and services on mount to allow exact object matching when booking
   useEffect(() => {
@@ -164,14 +201,31 @@ export default function ConciergePage() {
 
   // Pre-select salon + service and navigate to booking wizard
   function handleBookNow(recService) {
-    const fullSalon = salons.find((s) => s.id === recService.salon_id);
+    let fullSalon = salons.find((s) => s.id === recService.salon_id);
+    if (!fullSalon) {
+      const recSalon = recommendation?.recommended_salons?.find((s) => s.salon_id === recService.salon_id);
+      fullSalon = {
+        id: recService.salon_id,
+        name: recSalon ? recSalon.name : (recService.salon_name || "Selected Salon"),
+        area: recService.area || "Bangalore"
+      };
+    }
+    
     // Find matching service or fallback to first service in the salon
     let fullService = services.find(
       (s) => s.id === recService.service_id || (s.salon_id === recService.salon_id && s.service_name.toLowerCase().includes(recService.name.toLowerCase()))
     );
-
-    if (!fullService && services.length > 0) {
-      fullService = services.find((s) => s.salon_id === recService.salon_id);
+    if (!fullService && services.length > 0 && fullSalon) {
+      fullService = services.find((s) => s.salon_id === fullSalon.id);
+    }
+    if (!fullService && fullSalon) {
+      fullService = {
+        id: recService.service_id || 99999,
+        salon_id: fullSalon.id,
+        service_name: recService.name || "Bespoke Service",
+        price: recService.price_estimate || 2500,
+        duration_minutes: 45
+      };
     }
 
     const hairstyleName = recommendation?.recommended_hairstyles?.[0]?.name || "";
@@ -184,12 +238,17 @@ export default function ConciergePage() {
           hairstyleName: hairstyleName,
           occasion: occasion,
           hairType: hairType,
-          isAIRecommendations: true
+          isAIRecommendations: true,
+          from: "/concierge"
         },
       });
     } else {
       // Direct fallback to booking page if objects not found
-      navigate("/book");
+      navigate("/book", {
+        state: {
+          from: "/concierge"
+        }
+      });
     }
   }
 

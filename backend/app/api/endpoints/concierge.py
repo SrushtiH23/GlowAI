@@ -24,6 +24,9 @@ from app.schemas.concierge import (
     FaceAnalysisResponse,
     MakeupRecommendation,
     DressAnalysisResponse,
+    StylistResponse,
+    StylistService,
+    StylistOffer,
 )
 from app.core.config import settings
 
@@ -167,7 +170,7 @@ INSTRUCTIONS:
 """
 
     # 5. Call Gemini API
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
     request_body = {
         "contents": [
             {
@@ -527,7 +530,7 @@ CRITICAL REMINDERS:
 4. Analyze the image carefully — pay close attention to facial hair, bone structure, and overall presentation."""
 
         # Call Gemini API
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
         request_body = {
             "contents": [
                 {
@@ -990,7 +993,7 @@ async def analyze_dress(
         """
 
         # Call Gemini API
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
         request_body = {
             "contents": [
                 {
@@ -1226,3 +1229,388 @@ def delete_saved_recommendation(
     db.delete(rec)
     db.commit()
     return {"id": id, "deleted": True}
+
+
+# ── POST /api/concierge/stylist ──────────────────────────────────
+
+GEMINI_STYLIST_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "category": {
+            "type": "STRING",
+            "description": "Detected category: Hair, Skin, Nails, Makeup, Beard, Grooming, or General Beauty"
+        },
+        "observations": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "description": "Observed facial/hair/nail details or user description analysis"
+        },
+        "possible_concerns": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "description": "Potential concerns (e.g. Frizz, Dryness, Dullness). Safety rule: NEVER diagnose medical conditions like eczema or psoriasis. Frame as cosmetic concerns (e.g. dryness, irritation)."
+        },
+        "recommended_services": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name": {"type": "STRING"},
+                    "estimated_cost": {"type": "NUMBER"},
+                    "why_helps": {"type": "STRING"},
+                    "salon_id": {"type": "INTEGER"},
+                    "salon_name": {"type": "STRING"},
+                    "service_id": {"type": "INTEGER"}
+                },
+                "required": ["name", "estimated_cost", "why_helps", "salon_id", "salon_name"]
+            }
+        },
+        "price_range_min": {"type": "NUMBER"},
+        "price_range_max": {"type": "NUMBER"},
+        "suitable_salon_category": {"type": "STRING"},
+        "booking_recommendation": {
+            "type": "STRING",
+            "description": "Specific session booking recommendation (e.g. 90-minute Hair Botox Session)"
+        },
+        "explanation": {"type": "STRING", "description": "Concise luxury summary / explanation"}
+    },
+    "required": [
+        "category",
+        "observations",
+        "possible_concerns",
+        "recommended_services",
+        "price_range_min",
+        "price_range_max",
+        "suitable_salon_category",
+        "booking_recommendation",
+        "explanation"
+    ]
+}
+
+@router.post(
+    "/stylist",
+    response_model=StylistResponse,
+    summary="✨ Aura AI Stylist - Multimodal Beauty Assistant",
+)
+async def aura_ai_stylist(
+    file: UploadFile = File(None),
+    query: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Multimodal AI beauty stylist that takes text and/or images to provide cosmetic observations,
+    beauty concerns, salon service suggestions, price estimates, and active offers.
+    Safety: Never diagnoses medical skin/hair issues (eczema/psoriasis).
+    """
+    from app.models.offer import Offer
+
+    db_salons = db.query(Salon).all()
+    db_services = db.query(Service).all()
+    db_offers = db.query(Offer).filter(Offer.is_active == True).all()
+
+    if not db_salons:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No salons available in database.",
+        )
+
+    # Fallback if Gemini key is missing
+    if not settings.GEMINI_API_KEY:
+        logger.warning("GEMINI_API_KEY is not configured. Falling back to mock AI Stylist.")
+        return generate_mock_stylist_response(query, file, db_salons, db_services, db_offers)
+
+    # Call Gemini API if key is present
+    try:
+        # Construct JSON schemas
+        salons_context = [{"id": s.id, "name": s.name, "area": s.area, "rating": s.rating} for s in db_salons]
+        services_context = [{"id": s.id, "salon_id": s.salon_id, "service_name": s.service_name, "category": s.category, "price": s.price} for s in db_services]
+        offers_context = [{"title": o.title, "discount_percentage": o.discount_percentage, "salon_id": o.salon_id, "category": o.category} for o in db_offers]
+
+        base64_image = None
+        mime_type = None
+        if file:
+            image_bytes = await file.read()
+            import base64
+            base64_image = base64.b64encode(image_bytes).decode("utf-8")
+            mime_type = file.content_type
+
+        prompt = f"""You are "✨ Aura AI Stylist", the professional beauty, styling, and salon concierge consultant for "Aura Elite", a luxury wellness platform in Bangalore.
+Analyze the user's beauty, grooming, or styling request, and analyze the uploaded photo if provided.
+
+USER REQUEST/QUERY:
+"{query}"
+
+IMAGE UPLOADED: {"Yes" if file else "No"}
+
+AVAILABLE SALONS:
+{json.dumps(salons_context, indent=2)}
+
+AVAILABLE SERVICES:
+{json.dumps(services_context, indent=2)}
+
+AVAILABLE OFFERS:
+{json.dumps(offers_context, indent=2)}
+
+SAFETY INSTRUCTIONS (CRITICAL):
+- You MUST NEVER diagnose medical conditions or mention clinical terms (e.g. eczema, psoriasis, alopecia, dermatitis, acne vulgaris, infections).
+- Instead, describe them as cosmetic concerns: e.g. "dryness, scaling, irritation, textures".
+- Add a safety note: "The query or image may show signs of dryness or irritation. Consider consulting a dermatologist for professional diagnosis." if any medical-like query is presented.
+
+STEPS:
+1. Category Detection: Automatically classify into Hair, Skin, Nails, Makeup, Beard, Grooming, or General Beauty.
+2. List 2-3 specific visual or textual observations.
+3. List 2-3 cosmetic concerns.
+4. Recommend 1-2 actual salon services from the provided database services list that address these concerns. Ensure to fill in the correct salon_id, salon_name, and service_id.
+5. Identify any relevant Active Offers from the provided offers list.
+6. Provide an estimated price range (min and max) in INR.
+7. Recommend a specific Booking recommendation (e.g. "90-minute Hair Botox Session") and write an elegant concierge summary explanation.
+"""
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
+        parts = [{"text": prompt}]
+        if base64_image and mime_type:
+            parts.append({
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": base64_image
+                }
+            })
+
+        request_body = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "responseSchema": GEMINI_STYLIST_SCHEMA,
+                "temperature": 0.3
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            res = await client.post(api_url, json=request_body)
+            if res.status_code != 200:
+                logger.error(f"Gemini API error during stylist chat: {res.status_code} - {res.text}")
+                return generate_mock_stylist_response(query, file, db_salons, db_services, db_offers)
+
+            response_data = res.json()
+            generated_text = response_data['candidates'][0]['content']['parts'][0]['text']
+            
+            # Clean up potential markdown formatting from Gemini
+            generated_text = generated_text.strip()
+            if generated_text.startswith("```json"):
+                generated_text = generated_text[7:]
+            if generated_text.endswith("```"):
+                generated_text = generated_text[:-3]
+            generated_text = generated_text.strip()
+            
+            resp_dict = json.loads(generated_text)
+
+            # Map offers to StylistOffer objects
+            mapped_offers = []
+            for o in resp_dict.get("active_offers", []):
+                mapped_offers.append(StylistOffer(
+                    title=o.get("title"),
+                    discount_percentage=o.get("discount_percentage", 0),
+                    salon_name=o.get("salon_name"),
+                    salon_id=o.get("salon_id")
+                ))
+
+            if not mapped_offers and db_offers:
+                rec_salons_ids = [s.get("salon_id") for s in resp_dict.get("recommended_services", [])]
+                for o in db_offers:
+                    if o.salon_id in rec_salons_ids:
+                        mapped_offers.append(StylistOffer(
+                            title=o.title,
+                            discount_percentage=o.discount_percentage,
+                            salon_name=o.salon.name if o.salon else "Salon Partner",
+                            salon_id=o.salon_id
+                        ))
+
+            return StylistResponse(
+                category=resp_dict.get("category", "General Beauty"),
+                observations=resp_dict.get("observations", []),
+                possible_concerns=resp_dict.get("possible_concerns", []),
+                recommended_services=[
+                    StylistService(
+                        name=s.get("name"),
+                        estimated_cost=s.get("estimated_cost"),
+                        why_helps=s.get("why_helps"),
+                        salon_id=s.get("salon_id"),
+                        salon_name=s.get("salon_name"),
+                        service_id=s.get("service_id")
+                    ) for s in resp_dict.get("recommended_services", [])
+                ],
+                price_range_min=resp_dict.get("price_range_min", 0.0),
+                price_range_max=resp_dict.get("price_range_max", 0.0),
+                suitable_salon_category=resp_dict.get("suitable_salon_category", "Luxury Salon"),
+                active_offers=mapped_offers,
+                booking_recommendation=resp_dict.get("booking_recommendation", ""),
+                explanation=resp_dict.get("explanation", ""),
+                is_mock=False
+            )
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Failed to get Gemini stylist response: {repr(e)}\n{traceback.format_exc()}")
+        return generate_mock_stylist_response(query, file, db_salons, db_services, db_offers)
+
+
+def generate_mock_stylist_response(
+    query: str,
+    file: Any,
+    salons: List[Salon],
+    services: List[Service],
+    offers: List[Any],
+) -> StylistResponse:
+    """Fallback generator matching queries and files to rich cosmetic responses."""
+    q = query.lower() if query else ""
+    filename = file.filename.lower() if file else ""
+
+    # Check for medical diagnoses questions
+    is_medical = any(word in q for word in ["eczema", "psoriasis", "alopecia", "dermatitis", "infection", "fungus", "disease"])
+
+    # Determine category
+    if any(word in q or word in filename for word in ["hair", "frizz", "botox", "keratin", "color", "cut", "bald"]):
+        category = "Hair"
+    elif any(word in q or word in filename for word in ["skin", "facial", "acne", "dull", "dry", "wrinkle", "dark spot"]):
+        category = "Skin"
+    elif any(word in q or word in filename for word in ["nail", "manicure", "pedicure", "extensions", "gel", "chrome"]):
+        category = "Nails"
+    elif any(word in q or word in filename for word in ["makeup", "lips", "eyeliner", "wedding", "glam"]):
+        category = "Makeup"
+    elif any(word in q or word in filename for word in ["beard", "shave", "trim", "mustache"]):
+        category = "Beard"
+    else:
+        category = "General Beauty"
+
+    # Default Mock Details
+    if is_medical:
+        category = "Skin"
+        observations = ["Scaling and mild redness observed in query details", "Indication of localized dry skin flakes"]
+        possible_concerns = ["Cosmetic dryness", "Skin scaling/peeling", "Visual redness"]
+        explanation = (
+            "Your query mentions symptoms that may align with skin scaling or redness. "
+            "Please note that as an AI Beauty Stylist, I cannot provide medical diagnoses. "
+            "The query/image may show signs of dryness or cosmetic irritation. We highly recommend consulting a "
+            "dermatologist for a professional diagnosis. For gentle cosmetic care, a soothing, hypoallergenic facial "
+            "or hydrating scalp therapy at Warren Tricomi using natural botanical formulations is recommended."
+        )
+        service_keyword = "facial"
+        booking_rec = "Soothing Hypoallergenic Facial Consultation"
+    elif category == "Hair":
+        observations = ["Visual patterns indicate elevated frizz along the cuticle", "Slight dry tips in the hair ends", "Natural wavy structure requiring deep nourishment"]
+        possible_concerns = ["Frizz", "Lack of moisture/hydration", "Heat styling dryness"]
+        explanation = (
+            "Your hair profile shows raised cuticles resulting in elevated frizz and flyaways. "
+            "To restore absolute silkiness and lock in moisture, a deep-acting Hair Botox or "
+            "Keratin infusion treatment is recommended. This coats the strands with key proteins to seal "
+            "in humidity protection."
+        )
+        service_keyword = "botox" if "botox" in q else "haircut" if "cut" in q else "service"
+        booking_rec = "90-minute Hair Botox Revitalization"
+    elif category == "Skin":
+        observations = ["Subtle moisture deficiency on cheek bones", "Uneven skin tone and minor dullness in texture"]
+        possible_concerns = ["Dullness", "Dehydration", "Texture unevenness"]
+        explanation = (
+            "We observe visual indications of surface dehydration and subtle dullness. "
+            "A luxury Hydra Facial or Brightening facial is perfect to deeply cleanse, gently exfoliate, "
+            "and infuse antioxidants and hyaluronic acid serums to revive a radiant, luminous glow."
+        )
+        service_keyword = "facial"
+        booking_rec = "75-minute Luxury Hydra Facial Ritual"
+    elif category == "Nails":
+        observations = ["Inspiration style outlines almond-shaped nails", "Desire for high-shine chrome finish extensions"]
+        possible_concerns = ["Nail length enhancement", "Cosmetic styling styling fit"]
+        explanation = (
+            "To replicate your inspiration design, a set of Gel Nail Extensions with a premium chrome "
+            "overlay and precise Almond shaping is recommended. This delivers maximum style longevity and a "
+            "flawless, mirror-like luxury finish."
+        )
+        service_keyword = "nail" if "nail" in q else "manicure"
+        booking_rec = "90-minute Premium Gel Chrome Nail Extensions"
+    elif category == "Makeup":
+        observations = ["Evening gala profile styling requested", "High-visibility lighting coordination needed"]
+        possible_concerns = ["Occasion makeup coordination", "Facial structure definition"]
+        explanation = (
+            "For your special event, we recommend an HD Evening Glam look featuring soft smokey eyes, "
+            "champagne gold lid highlights, and a neutral contour to complement your dress color. "
+            "Book a session with a master stylist at Warren Tricomi for long-lasting perfection."
+        )
+        service_keyword = "makeup"
+        booking_rec = "60-minute HD Luxury Evening Makeup Styling"
+    elif category == "Beard":
+        observations = ["Neckline contours show soft stray hairs", "Dry beard texture requiring deep conditioning"]
+        possible_concerns = ["Beard shaping", "Dryness/beard itch"]
+        explanation = (
+            "We recommend a Precision Beard Trim and Hot Towel Beard Spa. The organic oils and warm steam "
+            "soften coarse hair, hydrate the skin underneath to prevent itching, and provide a sharp jawline definition."
+        )
+        service_keyword = "beard" if "beard" in q else "shave"
+        booking_rec = "45-minute Royal Hot Towel Beard Trim & Spa"
+    else:
+        observations = ["General grooming request", "Bangalore salon recommendations requested"]
+        possible_concerns = ["Refining general self-care routine"]
+        explanation = (
+            "To refresh your grooming routine, we suggest a signature precision style haircut and luxury "
+            "scalp ritual at Rossano Ferretti or JCB Salon to experience absolute style transformation."
+        )
+        service_keyword = "haircut"
+        booking_rec = "Master Precision Stylist Consultation & Haircut"
+
+    # Search for actual DB service matching category keywords
+    rec_services = []
+    selected_salon = salons[0]
+
+    # Filter services
+    matching_services = [
+        s for s in services 
+        if service_keyword in s.service_name.lower() or category.lower() in s.category.lower()
+    ]
+    if not matching_services:
+        matching_services = [s for s in services if s.salon_id == selected_salon.id]
+    if not matching_services:
+        matching_services = services
+
+    # Select 1-2 services
+    for i, ms in enumerate(matching_services[:2]):
+        salon_obj = next((s for s in salons if s.id == ms.salon_id), selected_salon)
+        rec_services.append(StylistService(
+            name=ms.service_name,
+            estimated_cost=ms.price,
+            why_helps=f"Directly targets concerns with premium {category} care.",
+            salon_id=ms.salon_id,
+            salon_name=salon_obj.name,
+            service_id=ms.id
+        ))
+
+    # Calculate min/max price
+    costs = [s.estimated_cost for s in rec_services]
+    price_min = min(costs) * 0.9 if costs else 1000.0
+    price_max = sum(costs) * 1.1 if costs else 3000.0
+
+    # Match offers
+    rec_salon_ids = [s.salon_id for s in rec_services]
+    active_offers = []
+    for o in offers:
+        if o.salon_id in rec_salon_ids:
+            salon_obj = next((s for s in salons if s.id == o.salon_id), selected_salon)
+            active_offers.append(StylistOffer(
+                title=o.title,
+                discount_percentage=o.discount_percentage,
+                salon_name=salon_obj.name,
+                salon_id=o.salon_id
+            ))
+
+    return StylistResponse(
+        category=category,
+        observations=observations,
+        possible_concerns=possible_concerns,
+        recommended_services=rec_services,
+        price_range_min=round(price_min),
+        price_range_max=round(price_max),
+        suitable_salon_category="Premium Luxury Spa & Salon",
+        active_offers=active_offers,
+        booking_recommendation=booking_rec,
+        explanation=explanation,
+        is_mock=True
+    )
+

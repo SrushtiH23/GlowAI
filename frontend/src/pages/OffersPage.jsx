@@ -33,11 +33,12 @@ export default function OffersPage() {
     setLoading(true);
     setError("");
     try {
-      // Fetch from endpoint /offers/active (unprefixed) or /api/offers/active
       const res = await fetch(`${API}/offers/active`);
       if (res.ok) {
         const data = await res.json();
-        setOffers(data);
+        // Backend already sorts by discount_percentage desc, but we guarantee it here
+        const sorted = data.sort((a, b) => b.discount_percentage - a.discount_percentage);
+        setOffers(sorted);
       } else {
         throw new Error("Failed to fetch active offers.");
       }
@@ -57,7 +58,8 @@ export default function OffersPage() {
         hairstyleName: offer.title,
         isAIRecommendations: true,
         occasion: "Exclusive Deal Promotion",
-        notes: `✨ Exclusive Deal Applied:\n- Offer: ${offer.title}\n- Discount: ${offer.discount_percentage}% OFF\n- Category: ${offer.category}\n- Valid Until: ${offer.valid_until}`
+        notes: `✨ Exclusive Deal Applied:\n- Offer: ${offer.title}\n- Discount: ${offer.discount_percentage}% OFF\n- Category: ${offer.category}\n- Valid Until: ${offer.valid_until}`,
+        from: "/offers"
       }
     });
   }
@@ -93,32 +95,42 @@ export default function OffersPage() {
     });
   };
 
-  // Sections Sorting & Filtration
   const filteredOffers = filterByCategory(offers, activeCategory);
 
-  // Trending: Rating >= 4.7
-  const trendingOffers = filteredOffers.filter(o => (o.salon_rating || 0) >= 4.7);
-
-  // Best Discounts: sorted by discount_percentage desc
-  const bestDiscounts = [...filteredOffers].sort((a, b) => b.discount_percentage - a.discount_percentage);
-
-  // Ending Soon: sorted by valid_until asc (or simply first 4 items)
-  const endingSoon = [...filteredOffers].sort((a, b) => a.valid_until.localeCompare(b.valid_until));
+  // Featured and Trending highlights (rating >= 4.7 OR discount_percentage >= 30%)
+  const highlightedOffers = filteredOffers.filter(
+    (o) => (o.salon_rating || 0) >= 4.7 || o.discount_percentage >= 30
+  );
 
   const categories = ["All", "Hair Services", "Makeup", "Bridal", "Spa", "Nails", "Skincare"];
 
   return (
     <div style={styles.page}>
       <Navbar />
+      <style>{`
+        .offers-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 28px;
+          width: 100%;
+        }
+        @media (max-width: 640px) {
+          .offers-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+          }
+        }
+      `}</style>
+
       <div style={styles.container}>
         
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerGlow} />
-          <span style={styles.topBadge}>Curated Luxury Savings</span>
-          <h1 style={styles.title}>Live Offers & Elite Deals</h1>
+          <span style={styles.topBadge}>Verified Salon Catalog</span>
+          <h1 style={styles.title}>Exclusive Deals & Live Offers</h1>
           <p style={styles.subtitle}>
-            Experience Bangalore's finest master salons at preferred pricing. Active deals updated in real time.
+            Experience Bangalore's finest master salons at preferred pricing. Direct booking for active, verified promotions.
           </p>
         </div>
 
@@ -163,72 +175,54 @@ export default function OffersPage() {
         ) : (
           <div style={styles.sectionsContainer}>
             
-            {/* 1. Best Discounts Section */}
-            {bestDiscounts.length > 0 && (
+            {/* 1. Featured & Trending Highlights Section */}
+            {highlightedOffers.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionHeader}>
-                  <h2 style={styles.sectionTitle}>💎 Best Discounts</h2>
-                  <span style={styles.sectionSubtitle}>Highest savings on premium services</span>
+                  <h2 style={styles.sectionTitle}>⭐ Featured & Trending</h2>
+                  <span style={styles.sectionSubtitle}>Highly rated partner experiences with exceptional savings</span>
                 </div>
-                <div style={{
-                  ...styles.offersGrid,
-                  gridTemplateColumns: isMobileOrTablet ? "1fr" : "repeat(auto-fill, minmax(360px, 1fr))"
-                }}>
-                  {bestDiscounts.slice(0, 4).map((offer) => (
-                    <OfferCard key={offer.id} offer={offer} onBook={handleBookOffer} />
+                <div className="offers-grid">
+                  {highlightedOffers.map((offer) => (
+                    <OfferCard
+                      key={`highlight-${offer.id}`}
+                      offer={offer}
+                      onBook={handleBookOffer}
+                      isHighlighted={true}
+                    />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 2. Trending Offers Section */}
-            {trendingOffers.length > 0 && (
-              <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                  <h2 style={styles.sectionTitle}>🔥 Trending Offers</h2>
-                  <span style={styles.sectionSubtitle}>Highly rated partner experiences</span>
+            {/* 2. All Deals Section (Sorted by discount percentage) */}
+            <div style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <h2 style={styles.sectionTitle}>🏷️ All Verified Deals</h2>
+                <span style={styles.sectionSubtitle}>Sorted by highest discount percentage first</span>
+              </div>
+              
+              {filteredOffers.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <span style={styles.emptyIcon}>🔍</span>
+                  <h3>No Deals Found</h3>
+                  <p>No active deals in category "{activeCategory}" at the moment.</p>
                 </div>
-                <div style={{
-                  ...styles.offersGrid,
-                  gridTemplateColumns: isMobileOrTablet ? "1fr" : "repeat(auto-fill, minmax(360px, 1fr))"
-                }}>
-                  {trendingOffers.slice(0, 4).map((offer) => (
-                    <OfferCard key={offer.id} offer={offer} onBook={handleBookOffer} />
+              ) : (
+                <div className="offers-grid">
+                  {filteredOffers.map((offer) => (
+                    <OfferCard
+                      key={`all-${offer.id}`}
+                      offer={offer}
+                      onBook={handleBookOffer}
+                      isHighlighted={false}
+                    />
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* 3. Ending Soon Section */}
-            {endingSoon.length > 0 && (
-              <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                  <h2 style={styles.sectionTitle}>⏳ Ending Soon</h2>
-                  <span style={styles.sectionSubtitle}>Last chance to book before expiry</span>
-                </div>
-                <div style={{
-                  ...styles.offersGrid,
-                  gridTemplateColumns: isMobileOrTablet ? "1fr" : "repeat(auto-fill, minmax(360px, 1fr))"
-                }}>
-                  {endingSoon.slice(0, 4).map((offer) => (
-                    <OfferCard key={offer.id} offer={offer} onBook={handleBookOffer} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Show All Deals list if category is filtered */}
-            {activeCategory !== "All" && filteredOffers.length === 0 && (
-              <div style={styles.emptyState}>
-                <span style={styles.emptyIcon}>🔍</span>
-                <h3>No Deals Found</h3>
-                <p>No active deals in category "{activeCategory}" at the moment.</p>
-              </div>
-            )}
-
+              )}
+            </div>
           </div>
         )}
-
       </div>
     </div>
   );
@@ -236,18 +230,32 @@ export default function OffersPage() {
 
 // ── Offer Card Component ──────────────────────────────────────────
 
-function OfferCard({ offer, onBook }) {
+function OfferCard({ offer, onBook, isHighlighted }) {
+  const isTrending = (offer.salon_rating || 0) >= 4.7;
+  const isBestValue = offer.discount_percentage >= 30;
+
   return (
-    <div style={styles.card}>
+    <div style={{
+      ...styles.card,
+      ...(isHighlighted ? styles.highlightedCard : {})
+    }} className="premium-card">
       <div style={styles.cardImageContainer}>
         <img
           src={offer.salon_image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&auto=format&fit=crop&q=80"}
           alt={offer.salon_name}
           style={styles.cardImage}
         />
+        
+        {/* Floating Badges */}
         <div style={styles.discountBadge}>
           {offer.discount_percentage}% OFF
         </div>
+
+        {isHighlighted && (
+          <div style={styles.highlightBadge}>
+            {isBestValue && isTrending ? "★ ULTIMATE DEAL" : isTrending ? "🔥 TRENDING" : "★ FEATURED"}
+          </div>
+        )}
       </div>
 
       <div style={styles.cardContent}>
@@ -429,6 +437,8 @@ const styles = {
     background: "#121215",
     border: "1px solid #26262b",
     borderRadius: "12px",
+    width: "100%",
+    boxSizing: "border-box",
   },
   emptyIcon: {
     fontSize: "3rem",
@@ -473,11 +483,12 @@ const styles = {
     transition: "transform 0.3s, border-color 0.3s, box-shadow 0.3s",
     display: "flex",
     flexDirection: "column",
-    ":hover": {
-      transform: "translateY(-6px)",
-      borderColor: "#c5a880",
-      boxShadow: "0 12px 36px rgba(197,168,128,0.15)",
-    }
+    position: "relative",
+  },
+  highlightedCard: {
+    background: "linear-gradient(135deg, #16161b 0%, #121215 100%)",
+    border: "1px solid rgba(197, 168, 128, 0.4)",
+    boxShadow: "0 10px 30px rgba(197, 168, 128, 0.08)",
   },
   cardImageContainer: {
     height: "200px",
@@ -502,6 +513,23 @@ const styles = {
     borderRadius: "6px",
     boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
     letterSpacing: "0.03em",
+    zIndex: 2,
+  },
+  highlightBadge: {
+    position: "absolute",
+    top: "16px",
+    right: "16px",
+    background: "rgba(8, 8, 10, 0.8)",
+    backdropFilter: "blur(4px)",
+    border: "1px solid #c5a880",
+    color: "#c5a880",
+    fontWeight: 700,
+    fontSize: "0.75rem",
+    padding: "6px 12px",
+    borderRadius: "6px",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+    letterSpacing: "0.05em",
+    zIndex: 2,
   },
   cardContent: {
     padding: "20px",

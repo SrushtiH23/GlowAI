@@ -61,7 +61,7 @@ INSTRUCTIONS:
 3. Write a 2-3 sentence overall synthesis summary in an elegant and objective concierge style.
 """
 
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={settings.GEMINI_API_KEY}"
     request_body = {
         "contents": [
             {

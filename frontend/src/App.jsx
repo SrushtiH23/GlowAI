@@ -20,9 +20,9 @@ import BookingPage from "./pages/BookingPage";
 import BookingHistoryPage from "./pages/BookingHistoryPage";
 import ConciergePage from "./pages/ConciergePage";
 import FaceAnalysisPage from "./pages/FaceAnalysisPage";
+import AiStylistPage from "./pages/AiStylistPage";
 import ReviewSummarizerPage from "./pages/ReviewSummarizerPage";
 import OffersPage from "./pages/OffersPage";
-import OwnerDashboard from "./pages/OwnerDashboard";
 import HomePage from "./pages/HomePage";
 import Navbar from "./components/Navbar";
 
@@ -133,14 +133,15 @@ function Dashboard() {
 
   function handleQuickBookSalon(salon) {
     navigate("/book", {
-      state: { salon }
+      state: { salon, from: "/dashboard" }
     });
   }
 
   function handleBookRecService(recService) {
     navigate("/book", {
       state: {
-        salon: { id: recService.salon_id, name: "Selected Salon" }
+        salon: { id: recService.salon_id, name: "Selected Salon" },
+        from: "/dashboard"
       }
     });
   }
@@ -169,7 +170,7 @@ function Dashboard() {
 
         {/* Quick Actions Grid */}
         <div style={dashStyles.actionGrid}>
-          <button onClick={() => navigate("/book")} style={dashStyles.actionCard}>
+          <button onClick={() => navigate("/book", { state: { from: "/dashboard" } })} style={dashStyles.actionCard}>
             <div style={dashStyles.actionIcon}>💇‍♂️</div>
             <div style={dashStyles.actionTitle}>Book Salon</div>
             <div style={dashStyles.actionDesc}>Schedule a service at elite spas.</div>
@@ -197,6 +198,12 @@ function Dashboard() {
             <div style={dashStyles.actionIcon}>💬</div>
             <div style={{ ...dashStyles.actionTitle, color: "#34d399" }}>Review Insights</div>
             <div style={dashStyles.actionDesc}>Distill client feedback.</div>
+          </button>
+
+          <button onClick={() => navigate("/stylist")} style={dashStyles.actionCard}>
+            <div style={dashStyles.actionIcon}>✨</div>
+            <div style={{ ...dashStyles.actionTitle, color: "#facc15" }}>Aura AI Stylist</div>
+            <div style={dashStyles.actionDesc}>Multimodal style director.</div>
           </button>
         </div>
 
@@ -243,7 +250,7 @@ function Dashboard() {
               ) : (
                 <div style={dashStyles.emptyState}>
                   <p style={dashStyles.emptyText}>No upcoming bookings scheduled.</p>
-                  <button onClick={() => navigate("/book")} style={dashStyles.inlineBookBtn}>Book An Experience →</button>
+                  <button onClick={() => navigate("/book", { state: { from: "/dashboard" } })} style={dashStyles.inlineBookBtn}>Book An Experience →</button>
                 </div>
               )}
             </div>
@@ -461,6 +468,14 @@ export default function App() {
             }
           />
           <Route
+            path="/stylist"
+            element={
+              <ProtectedRoute>
+                <AiStylistPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/reviews"
             element={
               <ProtectedRoute>
@@ -473,14 +488,6 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <OffersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner-dashboard"
-            element={
-              <ProtectedRoute>
-                <OwnerDashboard />
               </ProtectedRoute>
             }
           />

@@ -483,7 +483,7 @@ export default function HomePage() {
                   <div style={styles.serviceFooter}>
                     <span style={styles.servicePrice}>{svc.price}</span>
                     <button
-                      onClick={() => navigate("/book", { state: { hairstyleName: svc.title } })}
+                      onClick={() => navigate("/book", { state: { hairstyleName: svc.title, from: "/" } })}
                       style={styles.serviceBookBtn}
                     >
                       Book Service
@@ -523,7 +523,7 @@ export default function HomePage() {
                   <span>⏳ {off.expiry}</span>
                 </div>
                 <button
-                  onClick={() => navigate("/book", { state: { notes: `Applied promotion: ${off.title}` } })}
+                  onClick={() => navigate("/book", { state: { notes: `Applied promotion: ${off.title}`, from: "/" } })}
                   style={styles.offerBtn}
                 >
                   Claim Offer

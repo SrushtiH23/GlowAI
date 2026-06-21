@@ -126,6 +126,10 @@ export default function BookingPage() {
   const location = useLocation();
 
   const [step, setStep] = useState(1);
+  const [initialStep, setInitialStep] = useState(1);
+  const [sourcePage, setSourcePage] = useState(() => {
+    return sessionStorage.getItem("aura_booking_from") || null;
+  });
 
   // Responsive & Map States
   const [viewMode, setViewMode] = useState("list");
@@ -205,13 +209,20 @@ export default function BookingPage() {
 
   // Handle pre-selection from concierge or redirect
   useEffect(() => {
+    if (location.state?.from) {
+      setSourcePage(location.state.from);
+      sessionStorage.setItem("aura_booking_from", location.state.from);
+    }
+
     if (location.state?.salon) {
       setSelectedSalon(location.state.salon);
       if (location.state.service) {
         setSelectedService(location.state.service);
         setStep(3); // Go straight to Date & Time selection
+        setInitialStep(3);
       } else {
         setStep(2); // Go to service selection
+        setInitialStep(2);
       }
 
       // Pre-fill notes if there is AI recommendation context
@@ -231,6 +242,9 @@ export default function BookingPage() {
         }
         setNotes(`✨ Personal styling pre-loaded:\n${notesParts.join("\n")}`);
       }
+    } else {
+      setStep(1);
+      setInitialStep(1);
     }
   }, [location.state]);
 
@@ -424,7 +438,17 @@ export default function BookingPage() {
   }
   function goBack() {
     setError("");
-    setStep((s) => s - 1);
+    if (step === initialStep && sourcePage) {
+      sessionStorage.removeItem("aura_booking_from");
+      navigate(sourcePage);
+    } else if (step > 1) {
+      setStep((s) => s - 1);
+    } else if (sourcePage) {
+      sessionStorage.removeItem("aura_booking_from");
+      navigate(sourcePage);
+    } else {
+      navigate("/dashboard");
+    }
   }
 
   // ── Calendar helpers ───────────────────────────────────────
@@ -1015,7 +1039,7 @@ export default function BookingPage() {
         {/* ─── FOOTER NAV BUTTONS ───────────────────────────── */}
         <div style={pg.footerRow}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {step > 1 ? (
+            {(step > 1 || !!sourcePage) ? (
               <button onClick={goBack} style={pg.backBtn}>
                 ← Back
               </button>

@@ -84,19 +84,19 @@ export default function Navbar() {
     { label: "Offers", path: "/offers", icon: "🏷️" },
     { label: "Book", path: "/book", icon: "💇‍♂️" },
     { label: "AI Concierge", path: "/concierge", icon: "✨" },
+    { label: "AI Stylist", path: "/stylist", icon: "✨" },
     { label: "Face shape", path: "/face-analysis", icon: "📷" },
     { label: "AI Insights", path: "/reviews", icon: "💬" },
   ];
 
-  if (user?.salon_id) {
-    desktopAuthedItems.push({ label: "Owner Panel", path: "/owner-dashboard", icon: "💼" });
-  }
+
 
   const mobileAuthedItems = [
     { label: "Dashboard", path: "/dashboard", icon: "🏠" },
     { label: "Offers", path: "/offers", icon: "🏷️" },
     { label: "Book", path: "/book", icon: "💇‍♂️" },
     { label: "AI Concierge", path: "/concierge", icon: "✨" },
+    { label: "AI Stylist", path: "/stylist", icon: "✨" },
     { label: "Face shape", path: "/face-analysis", icon: "📷" },
   ];
 
@@ -285,11 +285,7 @@ export default function Navbar() {
             <span style={styles.brandBadge}>Elite</span>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
-            {user?.salon_id && (
-              <button onClick={() => navigate("/owner-dashboard")} style={styles.mobileLogoutBtn}>
-                Portal
-              </button>
-            )}
+
             <button onClick={logout} style={styles.mobileLogoutBtn} aria-label="Sign Out">
               Sign Out
             </button>
