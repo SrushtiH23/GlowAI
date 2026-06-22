@@ -510,7 +510,7 @@ export default function BookingPage() {
      ════════════════════════════════════════════════════════════ */
 
   return (
-    <div style={pg.page}>
+    <div style={{ ...pg.page, paddingBottom: isMobileOrTablet ? "160px" : "100px" }}>
       <Navbar />
       <div style={pg.container}>
         {/* Header */}
@@ -1037,7 +1037,11 @@ export default function BookingPage() {
         )}
 
         {/* ─── FOOTER NAV BUTTONS ───────────────────────────── */}
-        <div style={pg.footerRow}>
+        <div style={{
+          ...pg.footerRow,
+          bottom: isMobileOrTablet ? "64px" : "0px",
+          padding: isMobileOrTablet ? "12px 16px" : "16px 40px"
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {(step > 1 || !!sourcePage) ? (
               <button onClick={goBack} style={pg.backBtn}>
